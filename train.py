@@ -12,7 +12,7 @@ bert_tiny = load_pretrained_bert_model()
 print("# of parameters: ", sum(p.numel() for p in bert_tiny.parameters()))
 optimizer = torch.optim.AdamW(bert_tiny.parameters(), lr=1e-3)
 
-batch_size = 32
+batch_size = 4
 word_data_file = open("word_data.json", "r")
 word_data = json.loads(word_data_file.read())
 word_data_file.close()
@@ -30,7 +30,6 @@ print("Sample word data: ", json.dumps(train_split[0], indent=4))
 video = VideoFileClip("obama-debt-cropped.mp4")
 video = video.resize((64, 64)) # code hint not showing up - does this method still work?
 
-batch_size = 4
 max_block_size = 20
 max_time_diff = 5 # start with 5 seconds to reduce number of input values to <1m
 seq_length = 256
@@ -44,12 +43,12 @@ def get_batch(split): # returns (batch_size, seq_length, 64, 64, 3), (batch_size
     x_text = []
     y = []
     for i in ix:
-        if len(y) > batch_size:
+        if len(y) >= batch_size:
             break
         for j in range(max_block_size):
             if i + j >= len(split_data):
                 break
-            if len(y) > batch_size:
+            if len(y) >= batch_size:
                 break
 
             frames = torch.zeros(seq_length, 64, 64, 3) # just to fit the image embedding size

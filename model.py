@@ -5,6 +5,10 @@ import math
 class ImageEmbeddings(torch.nn.Module):
     def __init__(self, dropout_value=0.1, n_embed=3, max_seq_len=512):
         super().__init__()
+        self.dropout_value = dropout_value
+        self.n_embed = n_embed
+        self.max_seq_len = max_seq_len
+
         self.position_embeddings = torch.nn.Embedding(max_seq_len, n_embed)
 
         self.conv1 = torch.nn.Conv2d(3, 6, 5)
@@ -22,17 +26,29 @@ class ImageEmbeddings(torch.nn.Module):
     def forward(self, x):
         # Given an image, process the image and reflect some information about the image. 
         position_ids = torch.arange(self.max_seq_len, dtype=torch.long, device=x.device)
+    
+        B, T = x.shape[0], x.shape[1] # Batch size, sequence length
+        new_shape = (B*T, x.shape[2], x.shape[3], x.shape[4])
+        x = x.view(new_shape)
+        x = x.permute(0, 3, 1, 2)
 
+        print("Input batch", x.shape)
         x = self.pool1(F.relu(self.conv1(x)))
+        print("After pool1", x.shape)
         x = self.dropout1(x)
         x = self.pool2(F.relu(self.conv2(x)))
+        print("After pool2", x.shape)
         x = self.dropout2(x)
         x = self.fc1(x)
+        print("After fc1", x.shape)
         x = self.dropout3(x)
         x = self.fc2(x)
         x += self.position_embeddings(position_ids)
         x = self.layer_norm(x)
         x = self.dropout4(x)
+
+        new_shape = (B, T, self.n_embed)
+        x = x.view(new_shape)
 
         return x
 
@@ -52,8 +68,12 @@ class BertTextEmbeddings(torch.nn.Module):
     def forward(self, x):
         position_ids = torch.arange(self.max_seq_len, dtype=torch.long, device=x.device)
         words_embeddings = self.word_embeddings(x)
-        position_embeddings = self.position_embeddings(position_ids.unsqueeze(0).repeat(x.shape[0], -1, -1))
-        segments_embeddings = self.token_type_embeddings(torch.tensor([1] * x.shape[0])) # Segment is guaranteed to be 1 because all text is generated. Repeat 1, B times. 
+        position_embeddings = self.position_embeddings(torch.stack([position_ids for _ in range(x.shape[0])], dim=0))
+        segments_embeddings = self.token_type_embeddings(
+            torch.stack(
+                [torch.tensor([1] * self.max_seq_len) for _ in range(x.shape[0])]
+            )
+        ) # Segment is guaranteed to be 1 because all text is generated. Repeat 1, B times. 
 
         print("Words embeddings: ", words_embeddings.shape)
         print("Position embeddings: ", position_embeddings.shape)
