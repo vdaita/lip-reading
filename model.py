@@ -40,6 +40,7 @@ class BertTextEmbeddings(torch.nn.Module):
     def __init__(self, vocab_size, n_embed=3, max_seq_len=16):
         super().__init__()
         self.max_seq_len = max_seq_len
+        self.n_embed = n_embed
 
         self.word_embeddings = torch.nn.Embedding(vocab_size, n_embed)
         self.position_embeddings = torch.nn.Embedding(max_seq_len, n_embed)
@@ -51,8 +52,12 @@ class BertTextEmbeddings(torch.nn.Module):
     def forward(self, x):
         position_ids = torch.arange(self.max_seq_len, dtype=torch.long, device=x.device)
         words_embeddings = self.word_embeddings(x)
-        position_embeddings = self.position_embeddings(position_ids)
-        segments_embeddings = self.token_type_embeddings(1) # Segment is guaranteed to be 1 because all text is generated. 
+        position_embeddings = self.position_embeddings(position_ids.unsqueeze(0).repeat(x.shape[0], -1, -1))
+        segments_embeddings = self.token_type_embeddings(torch.tensor([1] * x.shape[0])) # Segment is guaranteed to be 1 because all text is generated. Repeat 1, B times. 
+
+        print("Words embeddings: ", words_embeddings.shape)
+        print("Position embeddings: ", position_embeddings.shape)
+        print("Segments embeddings: ", segments_embeddings.shape)
 
         embeddings = words_embeddings + position_embeddings + segments_embeddings
         embeddings = self.LayerNorm(embeddings)
@@ -224,7 +229,7 @@ class NanoBERT(torch.nn.Module):
 
         self.decoder = BertDecoder(dropout, n_embed)
 
-    def forward(self, images, x):
+    def forward(self, images, x, targets=None):
         # attention masking for padded token
         # (batch_size, seq_len, seq_len)
         mask = (x > 0).unsqueeze(1).repeat(1, x.size(1), 1)
@@ -233,10 +238,13 @@ class NanoBERT(torch.nn.Module):
         embeddings = torch.cat([text_embeddings, image_embeddings], dim=1)
 
         encoded = self.encoder(embeddings, mask)
-
         decoded = self.decoder(encoded)
-        return decoded
-    
+
+        if targets == None:
+            return decoded, None
+        else:
+            return decoded, F.cross_entropy(decoded, targets)
+        
 tiny_bert_mapping = {
         "bert.embeddings.word_embeddings.weight": "embedding.word_embeddings.weight",
         "bert.embeddings.position_embeddings.weight": "embedding.position_embeddings.weight",
@@ -294,6 +302,11 @@ def load_pretrained_bert_model():
 
     layer_names_hf = list(sd_hf)
     layer_names = list(sd)
+
+    print("HF Model Layer names: ")
+    print(json.dumps(layer_names_hf, indent=4))
+    print("Local Layer Names: ")
+    print(json.dumps(layer_names, indent=4))
 
     for layer_name in layer_names_hf:
         print(layer_name)
