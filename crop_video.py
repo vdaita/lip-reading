@@ -15,7 +15,7 @@ def trim_and_crop(input_video, output_video="output.mp4"):
   video = video.subclip(45, video.duration - 15)
 
   # Crop the video
-  video = video.crop(x1=546, y1=180, x2=746, y2=380)
+  video = video.crop(x1=534, y1=70, x2=758, y2=294)
 
   # Reduce the frame rate
   video = video.set_fps(15)
